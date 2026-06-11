@@ -149,7 +149,6 @@ def generate_parameters_table(param_ranges=None, repeat=1):
                 repeated_combinations.append(dict(combo))
         combinations = repeated_combinations
 
-    #visualize_parameter_combinations(combinations)
     return combinations
 
 def visualize_parameter_combinations(combinations):
@@ -160,9 +159,9 @@ def visualize_parameter_combinations(combinations):
     for i, combo in enumerate(combinations):
         print(f"Combination {i+1}: {combo}")
 
-def visualize_deposition_parameters(deposition_lines):
+def print_deposition_tracks(deposition_lines):
     """
-    Utility function to visualize the deposition line parameters.
+    Utility function to print deposition tracks parameters.
     """
     text = ""
     for i, line in enumerate(deposition_lines):
@@ -305,8 +304,8 @@ def full_pipeline(method="hardcoded", tracks_parameters=None, lines_parameters=N
         translator.generate_programs(trajectory=path[accumulated_subs[i]:accumulated_subs[i+1]], output_dir=program_parameters['output_dir'])
     text = ""
     for i , line in enumerate(lines):
-        text += f"\n\n--- Substrate {i+1} Parameters ---\n"
-        text += visualize_deposition_parameters(line)
+        text += f"\n\n\n--- Substrate {i+1} Parameters ---\n\n"
+        text += print_deposition_tracks(line)
     
     txt_file = os.path.join(program_parameters['output_dir'], f"{program_parameters['program_name']}_parameters.txt")
     with open(txt_file, 'w') as f:

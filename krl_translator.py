@@ -398,38 +398,7 @@ $ADVANCE = 5
             f_dat.write("ENDDAT\n")
 
 
-    def _write_filesss(self, trajectory, output_dir):
-        dat_path = os.path.join(output_dir, f"{self.program_name}.dat")
-        src_path = os.path.join(output_dir, f"{self.program_name}.src")
-        with open(dat_path, 'w') as f_dat , open(src_path, 'w') as f_src:
-            f_dat.write(self._generate_dat_header())
-            f_src.write(self._generate_src_header())
-            # go to start position
-            point = copy.deepcopy(trajectory[0][0])
-            point['VEL'] = 100.0
-            f_dat.write(self._generate_dat_point(0,0, point, PTP=True))
-            f_src.write(self._generate_ilf_ptp(point, 0, 100))
-            
-            k = 1
-            for j, traj in enumerate(trajectory):
-                # Write every point's variable declaration
-                f_dat.write(f"; Data for {self.routine_name}_{j}\n")
-                for waypoint in traj:
-                    f_dat.write(self._generate_dat_point(k,j, waypoint))
-                    k += 1
-                    
-                f_dat.write(f";ENDDAT for {self.routine_name}_{j}\n\n")
-
-                # Write the ILF blocks for every point
-                for waypoint in traj:
-                    vel = waypoint.get('VEL', self.default_vel)
-                    C_DIS = True
-                    if waypoint == traj[-1]:  # If it's the last point, use a slower velocity for better stopping accuracy
-                        C_DIS = False
-                    f_src.write(self._generate_ilf_lin(k,j, vel, C_DIS))
-
-            f_dat.write("ENDDAT\n")
-            f_src.write("END\n")
+    
 
     def _generate_ilf_wait(self, wait_time):
         """Generates the Inline Form (ILF) for a WAIT SEC command."""
@@ -440,69 +409,10 @@ WAIT SEC {wait_time}
 
     
 
-    def _write_dat_file(self, trajectory, output_dir):
-        file_path = os.path.join(output_dir, f"{self.program_name}.dat")
-        
-        
-        with open(file_path, 'w') as f:
-            f.write(self._generate_dat_header())
-            point = copy.deepcopy(trajectory[0][0])
-            point['VEL'] = 100.0
-            f.write(self._generate_dat_point(0,0, point, PTP=True))
-
-            k = 0
-
-            for j, traj in enumerate(trajectory):
-                # Write every point's variable declaration
-                f.write(f"; Data for {self.routine_name}_{j}\n")
-                for waypoint in traj:
-                    f.write(self._generate_dat_point(k,j, waypoint))
-                    k += 1
-                    
-                f.write(f";ENDDAT for {self.routine_name}_{j}\n\n")
-
-            f.write("ENDDAT\n")
-        print(f"Success: .dat file generated at -> {file_path}")
-
-
-
     
 
 
-    def _write_src_file(self, trajectory, output_dir):
-        file_path = os.path.join(output_dir, f"{self.program_name}.src")
-
-        with open(file_path, 'w') as f:
-            f.write(self._generate_src_header())
-            # go to start position
-            #point = {'A1': 0, 'A2': -90, 'A3': 90, 'A4': 0, 'A5': 0, 'A6': 0}
-            f.write(self._generate_ilf_ptp('PCPDAT0', 0, 100))
-            # run a loop (routine - inter routines)
-            for i, traj in enumerate(trajectory):
-                f.write(f"{self.routine_name}_{i}()\n")
-                points = self.change_substrates(i, traj)
-                f.write(self._generate_ilf_ptp(points[0], i, 100))
-                f.write(self._generate_ilf_ptp(points[1], i, 100))
-                
-            f.write("END\n")
-            k = 0
-            for j, traj in enumerate(trajectory):
-                f.write(f"; --- Routine for trajectory {j} ---\n")
-                f.write(f"DEF {self.routine_name}_{j}()\n")
-                f.write(f"BOOL SeperateFiles\nSeperateFiles = FALSE\n")
-            # Write the ILF blocks for every point
-                for waypoint in traj:
-                    vel = waypoint.get('VEL', self.default_vel)
-                    C_DIS = True
-                    if waypoint == traj[-1]:  # If it's the last point, use a slower velocity for better stopping accuracy
-                        C_DIS = False
-                    f.write(self._generate_ilf_lin(k,j, vel, C_DIS))
-                    k += 1
-
-                f.write(self._generate_ilf_wait(0.03))
-                f.write("\nEND\n\n")
-            
-        print(f"Success: .src file generated at -> {file_path}")
+    
 
     def change_substrates(self, i = 0, trajectory = None):
         """Generates a subroutine for moving between substrates."""
@@ -522,40 +432,4 @@ WAIT SEC {wait_time}
     
 
 if __name__ == "__main__":
-    x = [[11]]*3
-    print(x)
-
-
-""""       
-;FOLD PTP HOME5  Vel=100 % DEFAULT;%{{PE}}
-;FOLD Parameters ;%{{h}}
-;Params IlfProvider=kukaroboter.basistech.inlineforms.movement.old; Kuka.IsGlobalPoint=False; Kuka.PointName=HOME5; Kuka.BlendingEnabled=False; Kuka.MoveDataPtpName=DEFAULT; Kuka.VelocityPtp=100; Kuka.CurrentCDSetIndex=0; Kuka.MovementParameterFieldEnabled=True; IlfCommand=PTP
-;ENDFOLD
-$BWDSTART = FALSE
-PDAT_ACT=PDEFAULT
-FDAT_ACT=FDEFAULT
-BAS (#PTP_PARAMS,100)
-SET_CD_PARAMS (0)
-$H_POS=XHOME
-PTP XHOME5 
-;ENDFOLD
-
-{self.routine_name}()
-WAIT SEC 0.3
-;FOLD PTP HOME5  Vel=100 % DEFAULT;%{{PE}}
-;FOLD Parameters ;%{{h}}
-;Params IlfProvider=kukaroboter.basistech.inlineforms.movement.old; Kuka.IsGlobalPoint=False; Kuka.PointName=HOME5; Kuka.BlendingEnabled=False; Kuka.MoveDataPtpName=DEFAULT; Kuka.VelocityPtp=100; Kuka.CurrentCDSetIndex=0; Kuka.MovementParameterFieldEnabled=True; IlfCommand=PTP
-;ENDFOLD
-$BWDSTART = FALSE
-PDAT_ACT=PDEFAULT
-FDAT_ACT=FDEFAULT
-BAS (#PTP_PARAMS,100)
-SET_CD_PARAMS (0)
-$H_POS=XHOME
-PTP XHOME5 
-;ENDFOLD
-END
-
-
-
-"""
+    print("Please run sample_test.py to see the KUKA program generation in action with a sample trajectory.")
