@@ -1,0 +1,19 @@
+# Python bytecode (compiled files)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Miniconda / Virtual environments
+.conda/
+env/
+venv/
+ENV/
+
+# VS Code specific settings
+.vscode/
+
+# Ubuntu/Linux system artifacts
+.DS_Store
+*.swp
+*~
