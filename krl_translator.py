@@ -45,6 +45,7 @@ class KUKATranslator:
     def LIN(self, XDAT, LDAT, FDAT, C_DIS=True, Translation=None):
         """Generates the ILF and DAT for a LIN movement."""
 
+        """future update: Add support for other orientation calculations (e.g., #TOOL, #BASE) and blending types (e.g., #CVEL). This will involve adjusting the ILF generation to include the appropriate parameters based on the LDAT settings and ensuring that the generated code correctly reflects the desired blending behavior. The current implementation assumes a simple linear movement with blending defined by the velocity, which may not cover all use cases."""
         
         src_code = "$BWDSTART = FALSE\n"
         DAT_code = ""
@@ -95,10 +96,8 @@ class KUKATranslator:
             if not (isinstance(FDAT, str) and isinstance(LDAT, str)):
                 point_name = f"XP{self.point_counter}"
                 code += f"{point_name} "
-                if 'X' in XDAT:
-                    type_of_point = "E6POS"
-                elif 'A1' in XDAT:
-                    type_of_point = "AXIS"
+                type_of_point = "E6POS"
+                
 
                 DAT_code += f"DECL {type_of_point} {point_name}=" + "{"
                 for key, value in XDAT.items():
@@ -122,6 +121,102 @@ class KUKATranslator:
         src_code = ilf + src_code + "\n;ENDFOLD\n"
         return src_code, DAT_code
     
+    def circle_parameter(self, Auxiliary = '', Desired = '', Orientation_type = 'VAR', Circular_movement_type = 'PATH'):
+        
+        
+        param = {
+            "Aux": Auxiliary,
+            "Des": Desired,
+            "Orientation_type": Orientation_type,
+            "Circular_movement_type": Circular_movement_type
+        }
+        return param
+
+    def CIRC(self, circle_parametre, LDAT, FDAT ,C_DIS=True):
+        """Generates the ILF and DAT for a CIRC movement."""
+
+        """future update: Add support for other orientation calculations (e.g., #TOOL, #BASE) and circular movement types (e.g., #TOOL). This will involve calculating the intermediate point based on the specified CDAT parameters and adjusting the rotation accordingly. The current implementation assumes a simple circular movement in the base frame with orientation defined by the tool axis, which may not cover all use cases."""
+
+        src_code = "$BWDSTART = FALSE\n"
+        DAT_code = ""
+        point_name = ""
+        vel = ""
+        tool_name = ""
+        base_name = ""
+        Ldat_name = ""
+        Cont = "CONT " if C_DIS else ""
+        Aux = circle_parametre["Aux"]
+        Des = circle_parametre["Des"]
+        Orientation_type = circle_parametre["Orientation_type"]
+        Circular_movement_type = circle_parametre["Circular_movement_type"]
+        if isinstance(LDAT, str):
+            src_code += f"LDAT_ACT={LDAT}\n"
+            Ldat_name = LDAT
+        else:
+            DAT_code += f"DECL LDAT LCPDATC{self.point_counter}=" + "{"
+            Ldat_name = f"LCPDATC{self.point_counter}"
+            for key, value in LDAT.items():
+                DAT_code += f"{key} {value},"
+            DAT_code = DAT_code.rstrip(',') + "}\n"
+            src_code += f"LDAT_ACT=LCPDATC{self.point_counter}\n"
+            vel = LDAT['VEL']
+
+        if isinstance(FDAT, str):
+            src_code += f"FDAT_ACT={FDAT}\n"
+        else:
+            DAT_code += f"DECL FDAT FC{self.point_counter}=" + "{"
+            for key, value in FDAT.items():
+                DAT_code += f"{key} ;FOLD CIRC{value},"
+            DAT_code = DAT_code.rstrip(',') + "}\n"
+            src_code += f"FDAT_ACT=FC{self.point_counter}\n"
+            tool_name = f"Tool[{FDAT['TOOL_NO']}]"
+            base_name = f"Base[{FDAT['BASE_NO']}]"
+        src_code += f"$ORI_TYPE = #{Orientation_type}\n"
+        src_code += f"$CIRC_TYPE = #{Circular_movement_type}\n"
+        src_code += f"BAS (#CP_PARAMS,{LDAT['VEL']})\n" # Improvement Possibility
+        src_code += "SET_CD_PARAMS (0)\n" # Improvement Possibility
+
+
+        code = "CIRC "
+        points = [Aux, Des]
+        names = ["Aux", "Des"]
+        for i, point in enumerate(points):
+            if isinstance(point, str):
+                names[i] = point
+                code += f"{names[i]} "
+            else:
+                
+
+                if not (isinstance(FDAT, str) and isinstance(LDAT, str)):
+                    point_name = f"XC{names[i]}{self.point_counter}"
+                    names[i] = point_name
+                    code += f"{point_name}, "
+                    type_of_point = "E6POS"
+
+                    DAT_code += f"DECL {type_of_point} {point_name}=" + "{"
+                    for key, value in Aux.items():
+                        DAT_code += f"{key} {value:.3f},"
+                    DAT_code = DAT_code.rstrip(',') + "}\n"
+                    
+                else:
+                    code +='{'
+                    for key, value in Aux.items():
+                        code += f"{key} {value:.3f},"
+                    code = code.rstrip(',') + "}, "
+        code = code.rstrip(', ') + " "
+
+
+        code += "C_DIS\n" if C_DIS else "\n"
+
+        src_code += code
+
+        ilf = f";FOLD CIRC {names[0]}, {names[1]} {Cont}Vel={vel} {tool_name} {base_name} ;%{{PE}}\n;FOLD Parameters ;%{{h}}\n;Params IlfProvider=kukaroboter.basistech.inlineforms.movement.old; Kuka.IsGlobalPoint=False; Kuka.PointName={point_name}; Kuka.BlendingEnabled={str(C_DIS).upper()}; Kuka.MoveDataName={Ldat_name}; Kuka.VelocityPath={vel}; Kuka.CurrentCDSetIndex=0; Kuka.MovementParameterFieldEnabled=True; IlfCommand=LIN\n;ENDFOLD\n"
+        if not isinstance(LDAT, str) or not isinstance(FDAT, str):
+            self.point_counter += 1  
+
+        src_code = ilf + src_code + "\n;ENDFOLD\n"
+        return src_code, DAT_code
+
     def PTP(self, XDAT, PDAT, FDAT, C_PTP=False, Translation=None):
         """Generates the ILF and DAT for a PTP movement."""
         src_code = "$BWDSTART = FALSE\n"
