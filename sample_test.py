@@ -2,6 +2,7 @@ from re import sub
 import copy
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import matplotlib.pyplot as plt
 import os
 from itertools import product, accumulate
 
@@ -167,6 +168,43 @@ def print_deposition_tracks(deposition_lines):
     for i, line in enumerate(deposition_lines):
         text += f"Track {i+1}: {i%2 + 1} A{90-abs(90-line['deposition_angle'])} D{line['sod']} V{line['velocity']}\n"
     return text
+def print_waypoints(waypoints, num = 10):
+    """
+    Utility function to print waypoints.
+    """
+    for i, waypoint in enumerate(waypoints):
+        print(f"Waypoint {i+1}: {waypoint}")
+        if i == num:
+            break
+
+def draw_3d(waypoints):
+    """
+    Utility function to visualize waypoints in 3D.
+    """
+
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(projection='3d')
+    points = np.array([waypoint['point'] for waypoint in waypoints])
+    normals = np.array([6.4*waypoint['normal'] for waypoint in waypoints])
+    tangents = np.array([2*waypoint['tangent'] for waypoint in waypoints])
+    ax.scatter(points[:, 0], points[:, 1], points[:, 2], color='red', s=1, label='Points')
+    #ax.scatter(points[672:, 0], points[672:, 1], points[672:, 2], color='green', s=1, label='Points')
+    
+    #ax.quiver(points[-36:, 0], points[-36:, 1], points[-36:, 2], normals[-36:, 0], normals[-36:, 1], normals[-36:, 2], color='blue', label='Normals')
+    ax.quiver(points[:36, 0], points[:36, 1], points[:36, 2], tangents[:36, 0], tangents[:36, 1], tangents[:36, 2], color='blue', label='Normals')
+    
+    #ax.scatter(0,0,0,color='green',s=5, label='Points')
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.legend()
+    ax.axis('equal')
+    
+    plt.show()
+
+
+
+
 
 def prepare_dataset_samples(tracks_parameters=None):
     """
@@ -247,6 +285,9 @@ def full_pipeline(method="hardcoded", tracks_parameters=None, lines_parameters=N
         lines = get_hardcoded_test_batch(tracks_parameters)
     elif method == "parameterized":
         lines = prepare_dataset_samples(tracks_parameters)
+    elif method == "custom":
+        waypoints = defaut_reparation_oval()
+        return waypoints
     print(f"\nTotal line sets generated: {sum(len(line_set) for line_set in lines)}")
     print(f"Total trajectories generated: {len(lines)}\n")
 
@@ -313,6 +354,136 @@ def full_pipeline(method="hardcoded", tracks_parameters=None, lines_parameters=N
     print(f"\nParameter details saved to: {txt_file}")
 
     
+def defaut_reparation_oval(T= 5, t = 0.2 ,R0= 145,r0= 11,s = 2,theta0 = 45,alpha=57, gamma=90, sod=50,v=100):
+    """this function is to generate the points, normals, and tangents for an oval-like paths
+    T: Total Thickness of defaut
+    t: thickness of one layer of deposition
+    R0: middle radius of defaut arc
+    r0: initial radius of defaut cross-section
+    s: deplacement between each track
+    theta0: angle of defaut cross-section
+    alpha: angle of defaut arc
+    gamma: deposition angle
+    sod: Standoff distance
+    v: deposition velocity
+    
+    """
+
+    waypoints = []
+    for i in range(T//t):
+        r = r0-t*i
+        dth = s/r
+        for theta in np.arange(90, theta0, -dth):
+            T12 = np.array([[0,-1,r],[1,0 ,0]])
+            X2 = np.array([r*np.cos(np.deg2rad(theta)), r*np.sin(np.deg2rad(theta)),1])
+            X1 = T12@X2
+            RR = [R0+X1[1],R0-X1[1]]
+            poses = []
+            Tangents = [] #in global base
+            for R1 in RR:
+                poses.append(np.array([RR*np.cos(np.deg2rad(180+alpha)),RR*np.sin(np.deg2rad(180+alpha)), T-X1[0]]))
+                poses.append(np.array([RR*np.cos(np.deg2rad(180-alpha)),RR*np.sin(np.deg2rad(180-alpha)), T-X1[0]]))
+                Tangents.append(np.array([np.cos(np.deg2rad(90+alpha)),np.sin(np.deg2rad(90+alpha)),0]))
+                Tangents.append(np.array([np.cos(np.deg2rad(90-alpha)),np.sin(np.deg2rad(90-alpha)),0]))
+            Tangents[2] = -Tangents[2]
+            Tangents[3] = -Tangents[3]
+
+
+            na = np.array([np.sin(np.deg2rad(90+theta)),0,np.cos(np.deg2rad(90+theta))])
+            for pose, tangent in zip(poses, Tangents):
+                tr = np.identity(4)
+                tr[:3,:] = np.column_stack((np.cross(tangent,np.array([0,0,1])),tangent,np.array([0,0,1])),pose)
+
+                waypoint = {
+                    'point': pose,
+                    'sod': sod,
+                    'angle': gamma,
+                    'velocity': v,
+                    'tangent' : tangent,
+                    'normal' : na,
+                    'transform' : tr,
+                    'mode': 'CIRC'
+                }
+
+                waypoints.append(waypoint)
+    return waypoints
+
+
+    
+def defaut_reparation_balayage(T= 5, t = 0.2 ,R0= 250,r0= 11,s = 2,theta0 = 45,alpha0=10, gamma=90, sod=50,v=100):
+    """this function is to generate the points, normals, and tangents for an oval-like paths
+    T: Total Thickness of defaut
+    t: thickness of one layer of deposition
+    R0: middle radius of defaut arc
+    r0: initial radius of defaut cross-section
+    s: deplacement between each track
+    theta0: angle of defaut cross-section
+    alpha: angle of defaut arc
+    gamma: deposition angle
+    sod: Standoff distance
+    v: deposition velocity
+    
+    """
+    safety = 3
+    k = 0
+    waypoints = []
+    alphas = [alpha0+safety, alpha0,-alpha0,-alpha0-safety]
+    for i in range(int(T//t)):
+        r = r0-t*i
+        print(r)
+        dth = np.rad2deg(s/r)
+        ranging = np.arange(theta0, 180-theta0, dth) if i%2 == 0 else np.arange(180-theta0, theta0, -dth)
+        for theta in ranging:
+            T12 = np.array([[0,-1,r0],[1,0 ,0]])
+            X2 = np.array([r*np.cos(np.deg2rad(theta)), r*np.sin(np.deg2rad(theta)),1])
+            X1 = T12@X2
+            RR = R0+X1[1]
+            '''
+            print(f'RR: {RR}')
+            print(f'T12: {T12}')
+            print(f'X1: {X1}')
+            print(f'X2: {X2}')
+            print(f'r: {r}')'''
+
+            poses = []
+            Tangents = [] #in global base
+            for alpha in alphas:
+                poses.append(np.array([RR*np.cos(np.deg2rad(180+alpha)),RR*np.sin(np.deg2rad(180+alpha)), T-X1[0]]))
+                Tangents.append(((-1)**k)*np.array([np.cos(np.deg2rad(90+alpha)),np.sin(np.deg2rad(90+alpha)),0]))
+
+            
+            modes = ['LIN','CIRC','CIRC','CIRC']
+            na = [np.array([np.sin(np.deg2rad(90+theta)),0,np.cos(np.deg2rad(90+theta))]),np.array([np.sin(np.deg2rad(90-theta)),0,np.cos(np.deg2rad(90-theta))])]
+            for pose, tangent, mode in zip(poses, Tangents,modes):
+                tr = np.identity(4)
+                tr[:3,:] = np.column_stack((np.cross(tangent,np.array([0,0,(-1)**k])),tangent,np.array([0,0,(-1)**k]),pose))
+
+                waypoint = {
+                    'point': pose,
+                    'sod': sod,
+                    'angle': (-1)**k*(90-gamma),
+                    'velocity': v,
+                    'tangent' : tangent,
+                    'normal' : tr[:3,:3]@na[k%2],
+                    'mode': mode
+                }
+
+                waypoints.append(waypoint)
+            k+=1
+        
+
+
+
+    return waypoints
+            
+
+
+
+
+
+
+                
+
 
 
 def my_change_substrates(i = 0, trajectory = None):
@@ -374,4 +545,7 @@ if __name__ == "__main__":
         'output_dir': directory
     }
     # parameterized, hardcoded
-    full_pipeline(method="parameterized", tracks_parameters=tracks_parameters, lines_parameters=lines_parameters, layer_parameters=layer_parameters, program_parameters=program_parameters)    
+    #full_pipeline(method="parameterized", tracks_parameters=tracks_parameters, lines_parameters=lines_parameters, layer_parameters=layer_parameters, program_parameters=program_parameters)    
+    waypoints = defaut_reparation_balayage()
+    draw_3d(waypoints)
+    print(len(waypoints))
