@@ -50,8 +50,7 @@ def create_rotation_matrix_arbitrary_axis(axis_vector, angle_deg):
     return T
 
 
-def generate_layer_toolpath(Layer_pos, layer_orientation, 
-                      trajectory):
+def generate_layer_toolpath(Layer_pos, layer_orientation, trajectory):
     """
     Generate KUKA toolpath poses for a single layer.
 
@@ -93,6 +92,55 @@ def generate_layer_toolpath(Layer_pos, layer_orientation,
         kuka_poses.append(kuka_pose)
         
     return kuka_poses
+
+
+
+def generate_layer_toolpath_experimental(Layer_pos, layer_orientation, trajectory):
+    """
+    Generate KUKA toolpath poses for a single layer.
+
+    The function builds the transform from the drawing base to the layer base,
+    applies point positions in the drawing frame, rotates the tool axis from
+    the layer base into the drawing frame, and then applies the tool offset.
+    The final pose is converted back to KUKA A/B/C angles in the drawing base.
+    """
+    T_layer_pos = create_translation_matrix(*Layer_pos[:3])
+    T_layer_rot = create_rotation_matrix_abc(*layer_orientation[:3])
+    T_layer_base = T_layer_pos @ T_layer_rot
+
+    kuka_poses = []
+    for wp in trajectory:
+
+        T_angle = create_rotation_matrix_arbitrary_axis(wp['tangent'], wp['angle'])
+        deposition_vector_local = -1*(T_angle[:3, :3] @ wp['normal'])
+        deposition_vector = T_layer_base[:3, :3] @ deposition_vector_local
+
+        tool_y = np.cross(deposition_vector, np.array([1, 0, 0]))
+        tool_x = np.cross(tool_y, deposition_vector)
+        local_pos = np.array([*wp['point'],1])
+        pos = T_layer_base@local_pos
+        kuka_pose = pos[:3]-wp['sod']*deposition_vector
+
+        rotation_matrix = np.column_stack((tool_x, tool_y, deposition_vector))
+
+
+        abc_euler = R.from_matrix(rotation_matrix).as_euler('zyx', degrees=True)
+        
+        kuka_pose = {
+            'X': round(kuka_pose[0], 2),
+            'Y': round(kuka_pose[1], 2),
+            'Z': round(kuka_pose[2], 2),
+            'A': round(abc_euler[0], 2), 
+            'B': round(abc_euler[1], 2), 
+            'C': round(abc_euler[2], 2),
+            'VEL': wp['velocity']  
+        }
+
+
+
+        
+    return kuka_poses
+
 
 if __name__ == "__main__":
     points = [np.array([0, 0, 0, 1]),
