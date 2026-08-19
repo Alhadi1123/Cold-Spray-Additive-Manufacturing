@@ -108,7 +108,7 @@ def generate_layer_toolpath_experimental(Layer_pos, layer_orientation, trajector
     T_layer_rot = create_rotation_matrix_abc(*layer_orientation[:3])
     T_layer_base = T_layer_pos @ T_layer_rot
 
-    kuka_poses = []
+    poses = []
     for wp in trajectory:
 
         T_angle = create_rotation_matrix_arbitrary_axis(wp['tangent'], wp['angle'])
@@ -126,20 +126,22 @@ def generate_layer_toolpath_experimental(Layer_pos, layer_orientation, trajector
 
         abc_euler = R.from_matrix(rotation_matrix).as_euler('zyx', degrees=True)
         
-        kuka_pose = {
+        pose = {
             'X': round(kuka_pose[0], 2),
             'Y': round(kuka_pose[1], 2),
             'Z': round(kuka_pose[2], 2),
             'A': round(abc_euler[0], 2), 
             'B': round(abc_euler[1], 2), 
             'C': round(abc_euler[2], 2),
-            'VEL': wp['velocity']  
+            'VEL': wp['velocity'],
+            'mode': wp['mode']
         }
+        poses.append(pose)
 
 
 
         
-    return kuka_poses
+    return poses
 
 
 if __name__ == "__main__":

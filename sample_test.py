@@ -1,13 +1,16 @@
+import json
 from re import sub
 import copy
 import numpy as np
+import math
 from scipy.spatial.transform import Rotation as R
 import matplotlib.pyplot as plt
 import os
 from itertools import product, accumulate
 
 from krl_translator import KUKATranslator
-from dataset_prep import generate_layer_toolpath
+from dataset_prep import generate_layer_toolpath_experimental as generate_layer_toolpath
+
 
 def discretize_lines_for_kinematics(deposition_lines, lines_parameters=None):
     """
@@ -177,6 +180,17 @@ def print_waypoints(waypoints, num = 10):
         if i == num:
             break
 
+def draw_kuka_points(waypoints):
+    """
+    Utility function to visualize waypoints in 3D.
+    """
+    pass
+
+
+
+
+
+
 def draw_3d(waypoints):
     """
     Utility function to visualize waypoints in 3D.
@@ -206,7 +220,7 @@ def draw_3d(waypoints):
 
 
 
-def prepare_dataset_samples(tracks_parameters=None):
+def prepare_dataset_samples(tracks_parameters=None, combinations_dir = None):
     """
     Main function to prepare dataset samples.
     """
@@ -226,8 +240,11 @@ def prepare_dataset_samples(tracks_parameters=None):
         }
 
 
-    combinations = generate_parameters_table(tracks_parameters['parameter_ranges'], tracks_parameters['repeat'])
-
+    if combinations_dir is None:
+        combinations = generate_parameters_table(tracks_parameters['parameter_ranges'], tracks_parameters['repeat'])
+    else:
+        with open(combinations_dir, 'r') as f:
+            combinations = json.load(f)
     deposition_lines = []
     i = 0
     j = 0
@@ -280,22 +297,53 @@ def full_pipeline(method="hardcoded", tracks_parameters=None, lines_parameters=N
             'Layer_pos': [[0, 0, 0]] * 8,
             'layer_orientation': [R.from_matrix([[-1,0,0],[0,1,0],[0,0,-1]]).as_euler('zyx', degrees=True)] * 8
         }
+
+
+    
+    if method == "custom":
+        waypoints = defaut_reparation_balayage_2()
+        trajectory = [waypoints]
+        path = []
+        for i,traj in enumerate(trajectory):
+            subpath = generate_layer_toolpath(
+                Layer_pos=layer_parameters['Layer_pos'][i],
+                layer_orientation=layer_parameters['layer_orientation'][i],
+                trajectory=traj
+            )
+            path.append(subpath)
+            print(len(subpath))
+
+        translator = KUKATranslator(
+        program_name=program_parameters['program_name'],
+        routine_name=program_parameters['routine_name'],
+        tool_id=program_parameters['tool_id'],
+        base_id=program_parameters['base_id']
+    )
+        translator.change_substrates = my_change_substrates
+        print("\n--- Generating KRL Programs ---")
+        print(f"Total programs to generate: {len(path)}")
+
+        translator.generate_programs(trajectory=path, output_dir=program_parameters['output_dir'])
+
+
+
+
+
+        return
     print("\n--- Generating Deposition Lines ---\n")
     if method == "hardcoded":
         lines = get_hardcoded_test_batch(tracks_parameters)
     elif method == "parameterized":
         lines = prepare_dataset_samples(tracks_parameters)
-    elif method == "custom":
-        waypoints = defaut_reparation_oval()
-        return waypoints
     print(f"\nTotal line sets generated: {sum(len(line_set) for line_set in lines)}")
     print(f"Total trajectories generated: {len(lines)}\n")
-
     print("\n--- Discretizing Lines for Kinematics ---")
     trajectory = []
     for i, line_set in enumerate(lines):
         traj = discretize_lines_for_kinematics(line_set, lines_parameters)
         trajectory.append(traj)
+            
+   
 
 
 
@@ -410,7 +458,7 @@ def defaut_reparation_oval(T= 5, t = 0.2 ,R0= 145,r0= 11,s = 2,theta0 = 45,alpha
 
 
     
-def defaut_reparation_balayage(T= 5, t = 0.2 ,R0= 250,r0= 11,s = 2,theta0 = 45,alpha0=10, gamma=90, sod=50,v=100):
+def defaut_reparation_balayage(T= 5, t = 0.2 ,R0= 145,r0= 12.5,s = 2,theta0 = 37,alpha0=21, gamma=90, sod=50,v=0.1):
     """this function is to generate the points, normals, and tangents for an oval-like paths
     T: Total Thickness of defaut
     t: thickness of one layer of deposition
@@ -450,9 +498,9 @@ def defaut_reparation_balayage(T= 5, t = 0.2 ,R0= 250,r0= 11,s = 2,theta0 = 45,a
             for alpha in alphas:
                 poses.append(np.array([RR*np.cos(np.deg2rad(180+alpha)),RR*np.sin(np.deg2rad(180+alpha)), T-X1[0]]))
                 Tangents.append(((-1)**k)*np.array([np.cos(np.deg2rad(90+alpha)),np.sin(np.deg2rad(90+alpha)),0]))
-
+            alphas.reverse() 
             
-            modes = ['LIN','CIRC','CIRC','CIRC']
+            modes = ['LIN','CIRC','CIRC','LIN']
             na = [np.array([np.sin(np.deg2rad(90+theta)),0,np.cos(np.deg2rad(90+theta))]),np.array([np.sin(np.deg2rad(90-theta)),0,np.cos(np.deg2rad(90-theta))])]
             for pose, tangent, mode in zip(poses, Tangents,modes):
                 tr = np.identity(4)
@@ -477,6 +525,137 @@ def defaut_reparation_balayage(T= 5, t = 0.2 ,R0= 250,r0= 11,s = 2,theta0 = 45,a
     return waypoints
             
 
+
+
+def defaut_reparation_balayage_2(d= 4, p = 7.3, l = 14.65, t = 0.4 ,R0= 145,s = 2,theta0 = 32,alpha0=22.5, gamma=90, sod=50,v=0.1,ext_circ = False):
+    """this function is to generate the points, normals, and tangents for an oval-like paths
+    T: Total Thickness of defaut
+    t: thickness of one layer of deposition
+    R0: middle radius of defaut arc
+    r0: initial radius of defaut cross-section
+    s: deplacement between each track
+    theta0: angle of defaut cross-section
+    alpha: angle of defaut arc
+    gamma: deposition angle
+    sod: Standoff distance
+    v: deposition velocity
+    
+    """
+    safety = 6
+    k = 0
+    waypoints = []
+    if ext_circ:
+        alphas = [alpha0+safety+10,alpha0+safety, 0,-(alpha0+safety),-(alpha0+safety+10)]
+        modes = ['CIRC','LIN','CIRC','CIRC','CIRC']
+        vitesse = [1,v,v,v,1]
+    else:
+        alphas = [alpha0+safety, alpha0,-alpha0,-alpha0-safety]
+        modes = ['LIN','CIRC','CIRC','LIN']
+        vitesse = [1,v,v,1]
+    
+    th0 = 90 - theta0
+    r0 = d + p*math.tan(np.deg2rad(th0))
+    for i in range(int(d//t)):
+        r = r0-t*i
+        dth = np.rad2deg(s/r)
+        print(r)
+
+        X1 = []
+        if i%2 == 0:
+            thetas1 = np.arange(th0, 90, dth)
+            dd = 1
+            
+
+        else:
+            thetas1 = np.arange(180-th0,90, -dth)
+            dd = -1
+
+
+            
+        for theta in thetas1:
+            T12 = np.array([[0,-1,r0],[1,0 ,dd*l/2.0]])
+            X2 = np.array([r*np.cos(np.deg2rad(theta)), r*np.sin(np.deg2rad(theta)),1])
+            X1.append(T12@X2)
+        
+        
+        ys = np.arange(X1[-1][1],-dd*l/2.0,-dd*s)
+        xs = np.array([t*i]*ys.size)
+
+        thetas2 = np.array([90]*ys.size)
+        for x,y in zip(xs,ys):
+            X1.append(np.array([x,y]))
+
+        th_start = 90+np.rad2deg(math.asin((-dd*l/2.0-X1[-1][1])/r))
+        if i%2 == 0:
+            thetas3 = np.arange(th_start+dth,180-th0, dth)
+            if (180-th0) - thetas3[-1] > dth/4:
+                thetas3= np.concatenate((thetas3,np.array([thetas3[-1]+dth])))
+        else:
+            thetas3 = np.arange(th_start-dth,th0, -dth)
+            if  thetas3[-1] - th0 > dth/2:
+                thetas3= np.concatenate((thetas3,np.array([thetas3[-1]-dth])))
+
+            
+        for theta in thetas3:
+            T12 = np.array([[0,-1,r0],[1,0 ,dd*l/2.0]])
+            X2 = np.array([r*np.cos(np.deg2rad(theta)), r*np.sin(np.deg2rad(theta)),1])
+            X1.append(T12@X2)
+            
+        thetas = np.concatenate((thetas1,thetas2,thetas3))
+        ths = thetas.tolist()
+
+            
+        
+        print(thetas)
+
+        for theta, x1 in zip(ths,X1):
+
+            RR = R0+x1[1]
+            
+
+            poses = []
+            Tangents = [] #in global base
+            for alpha in alphas:
+                poses.append(np.array([RR*np.cos(np.deg2rad(180+alpha)),RR*np.sin(np.deg2rad(180+alpha)), d-x1[0]]))
+                Tangents.append(((-1)**k)*np.array([np.cos(np.deg2rad(90+alpha)),np.sin(np.deg2rad(90+alpha)),0]))
+            alphas.reverse()
+            
+            
+            na = [np.array([np.sin(np.deg2rad(90+theta)),0,np.cos(np.deg2rad(90+theta))]),np.array([np.sin(np.deg2rad(90-theta)),0,np.cos(np.deg2rad(90-theta))])]
+            for pose, tangent, mode,vel in zip(poses, Tangents,modes,vitesse):
+                
+                tr = np.identity(4)
+                tr[:3,:] = np.column_stack((np.cross(tangent,np.array([0,0,(-1)**k])),tangent,np.array([0,0,(-1)**k]),pose))
+
+                waypoint = {
+                    'point': pose,
+                    'sod': sod,
+                    'angle': (-1)**k*(90-gamma),
+                    'velocity': vel,
+                    'tangent' : tangent,
+                    'normal' : tr[:3,:3]@na[k%2],
+                    'mode': mode
+                }
+
+                waypoints.append(waypoint)
+            k+=1
+
+    pose= waypoints[-1]['point']
+    tan = waypoints[-1]['tangent']
+    normal = waypoints[-1]['normal']
+    pose[0] = pose[0] - 100
+    waypoint = {
+        'point': pose,
+        'sod': 100,
+        'angle': 0,
+        'velocity': 0.5,
+        'tangent' : tan,
+        'normal' : normal,
+        'mode': 'LIN'
+    }
+    waypoints.append(waypoint)
+    return waypoints
+            
 
 
 
@@ -526,8 +705,8 @@ if __name__ == "__main__":
     }
 
     layer_parameters = {
-        'Layer_pos': [[0, 0, 0]]*8,
-        'layer_orientation': [R.from_matrix([[-1,0,0],[0,1,0],[0,0,-1]]).as_euler('zyx', degrees=True)]*8
+        'Layer_pos': [[-55,-143.6,0]]*8,
+        'layer_orientation': [R.from_matrix([[0,1,0],[-1,0,0],[0,0,1]]).as_euler('zyx', degrees=True)]*8
     }
 
     directory = "/mnt/bureau_folder/Codes/Robot source code/Autogenerated"
@@ -536,7 +715,7 @@ if __name__ == "__main__":
         
 
     program_parameters = {
-        'program_name': "ilf_test",
+        'program_name': "profile_defaut",
         'routine_name': "Routine",
         'tool_id': [2,2,2,2,2,2],
         'base_id': [10, 9, 8, 7, 6, 5],
@@ -545,7 +724,5 @@ if __name__ == "__main__":
         'output_dir': directory
     }
     # parameterized, hardcoded
-    #full_pipeline(method="parameterized", tracks_parameters=tracks_parameters, lines_parameters=lines_parameters, layer_parameters=layer_parameters, program_parameters=program_parameters)    
-    waypoints = defaut_reparation_balayage()
-    draw_3d(waypoints)
-    print(len(waypoints))
+    full_pipeline(method="custom", tracks_parameters=tracks_parameters, lines_parameters=lines_parameters, layer_parameters=layer_parameters, program_parameters=program_parameters)    
+

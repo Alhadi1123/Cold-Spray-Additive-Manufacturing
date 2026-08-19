@@ -73,7 +73,7 @@ class KUKATranslator:
         else:
             DAT_code += f"DECL FDAT FP{self.point_counter}=" + "{"
             for key, value in FDAT.items():
-                DAT_code += f"{key} ;FOLD LIN{value},"
+                DAT_code += f"{key} {value},"
             DAT_code = DAT_code.rstrip(',') + "}\n"
             src_code += f"FDAT_ACT=FP{self.point_counter}\n"
             tool_name = f"Tool[{FDAT['TOOL_NO']}]"
@@ -114,7 +114,7 @@ class KUKATranslator:
 
         src_code += code
 
-        ilf = f";FOLD LIN {point_name} {Cont}Vel={vel} {tool_name} {base_name} ;%{{PE}}\n;FOLD Parameters ;%{{h}}\n;Params IlfProvider=kukaroboter.basistech.inlineforms.movement.old; Kuka.IsGlobalPoint=False; Kuka.PointName={point_name}; Kuka.BlendingEnabled={str(C_DIS).upper()}; Kuka.MoveDataName={Ldat_name}; Kuka.VelocityPath={vel}; Kuka.CurrentCDSetIndex=0; Kuka.MovementParameterFieldEnabled=True; IlfCommand=LIN\n;ENDFOLD\n"
+        ilf = f";FOLD LIN {point_name[1:]} {Cont}Vel={vel} m/s {Ldat_name[1:]} {tool_name} {base_name} ;%{{PE}}\n;FOLD Parameters ;%{{h}}\n;Params IlfProvider=kukaroboter.basistech.inlineforms.movement.old; Kuka.IsGlobalPoint=False; Kuka.PointName={point_name[1:]}; Kuka.BlendingEnabled={str(C_DIS).upper()}; Kuka.MoveDataName={Ldat_name[1:]}; Kuka.VelocityPath={vel}; Kuka.CurrentCDSetIndex=0; Kuka.MovementParameterFieldEnabled=True; IlfCommand=LIN\n;ENDFOLD\n"
         if not isinstance(LDAT, str) or not isinstance(FDAT, str):
             self.point_counter += 1  
 
@@ -166,7 +166,7 @@ class KUKATranslator:
         else:
             DAT_code += f"DECL FDAT FC{self.point_counter}=" + "{"
             for key, value in FDAT.items():
-                DAT_code += f"{key} ;FOLD CIRC{value},"
+                DAT_code += f"{key} {value},"
             DAT_code = DAT_code.rstrip(',') + "}\n"
             src_code += f"FDAT_ACT=FC{self.point_counter}\n"
             tool_name = f"Tool[{FDAT['TOOL_NO']}]"
@@ -194,13 +194,13 @@ class KUKATranslator:
                     type_of_point = "E6POS"
 
                     DAT_code += f"DECL {type_of_point} {point_name}=" + "{"
-                    for key, value in Aux.items():
+                    for key, value in point.items():
                         DAT_code += f"{key} {value:.3f},"
                     DAT_code = DAT_code.rstrip(',') + "}\n"
                     
                 else:
                     code +='{'
-                    for key, value in Aux.items():
+                    for key, value in point.items():
                         code += f"{key} {value:.3f},"
                     code = code.rstrip(',') + "}, "
         code = code.rstrip(', ') + " "
@@ -210,7 +210,7 @@ class KUKATranslator:
 
         src_code += code
 
-        ilf = f";FOLD CIRC {names[0]}, {names[1]} {Cont}Vel={vel} {tool_name} {base_name} ;%{{PE}}\n;FOLD Parameters ;%{{h}}\n;Params IlfProvider=kukaroboter.basistech.inlineforms.movement.old; Kuka.IsGlobalPoint=False; Kuka.PointName={point_name}; Kuka.BlendingEnabled={str(C_DIS).upper()}; Kuka.MoveDataName={Ldat_name}; Kuka.VelocityPath={vel}; Kuka.CurrentCDSetIndex=0; Kuka.MovementParameterFieldEnabled=True; IlfCommand=LIN\n;ENDFOLD\n"
+        ilf = f";FOLD CIRC {names[0][1:]} {names[1][1:]} {Cont}Vel={vel} m/s {Ldat_name[1:]} {tool_name} {base_name} ;%{{PE}}\n;FOLD Parameters ;%{{h}}\n;Params IlfProvider=kukaroboter.basistech.inlineforms.movement.old; Kuka.IsGlobalPoint=False; Kuka.PointName={point_name[1:]}; Kuka.BlendingEnabled={str(C_DIS).upper()}; Kuka.MoveDataName={Ldat_name[1:]}; Kuka.VelocityPath={vel}; Kuka.CurrentCDSetIndex=0; Kuka.MovementParameterFieldEnabled=True; IlfCommand=LIN\n;ENDFOLD\n"
         if not isinstance(LDAT, str) or not isinstance(FDAT, str):
             self.point_counter += 1  
 
@@ -244,12 +244,14 @@ class KUKATranslator:
 
         if isinstance(FDAT, str):
             src_code += f"FDAT_ACT={FDAT}\n"
+            fdat_name = FDAT
         else:
-            DAT_code += f"DECL FDAT FP{self.point_counter}=" + "{"
+            fdat_name = f"FP{self.point_counter}"
+            DAT_code += f"DECL FDAT {fdat_name}=" + "{"
             for key, value in FDAT.items():
                 DAT_code += f"{key} {value},"
             DAT_code = DAT_code.rstrip(',') + "}\n"
-            src_code += f"FDAT_ACT=FP{self.point_counter}\n"
+            src_code += f"FDAT_ACT={fdat_name}\n"
             TOOL_NO = FDAT.get('TOOL_NO', self.tool_id[0])
             BASE_NO = FDAT.get('BASE_NO', self.base_id[0])
             tool_name = f"Tool[{TOOL_NO}]"
@@ -269,13 +271,13 @@ class KUKATranslator:
                     code += f"{key} {value:.3f},"
                 code = code.rstrip(',') + "} "
 
-            if not (isinstance(FDAT, str) and isinstance(PDAT, str)):
+            elif not (isinstance(FDAT, str) and isinstance(PDAT, str)):
                 point_name = f"XP{self.point_counter}"
                 code += f"{point_name} "
                 if 'X' in XDAT:
                     type_of_point = "E6POS"
                 elif 'A1' in XDAT:
-                    type_of_point = "AXIS"
+                    type_of_point = "E6AXIS"
                 DAT_code += f"DECL {type_of_point} {point_name}=" + "{"
                 for key, value in XDAT.items():
                     DAT_code += f"{key} {value:.3f},"
@@ -288,7 +290,7 @@ class KUKATranslator:
 
         code += "C_PTP\n" if C_PTP else "\n"
         src_code += code
-        ilf = f";FOLD PTP {point_name} {Cont}Vel={vel} {tool_name} {base_name} ;%{{PE}}\n;FOLD Parameters ;%{{h}}\n;Params IlfProvider=kukaroboter.basistech.inlineforms.movement.old; Kuka.IsGlobalPoint=False; Kuka.PointName={point_name}; Kuka.BlendingEnabled={str(C_PTP).upper()}; Kuka.MoveDataName={PDAT_name}; Kuka.VelocityPath={vel}; Kuka.CurrentCDSetIndex=0; Kuka.MovementParameterFieldEnabled=True; IlfCommand=PTP\n;ENDFOLD\n"
+        ilf = f";FOLD PTP {point_name[1:]} {Cont}Vel={vel} % {fdat_name[1:]} {tool_name} {base_name} ;%{{PE}}\n;FOLD Parameters ;%{{h}}\n;Params IlfProvider=kukaroboter.basistech.inlineforms.movement.old; Kuka.IsGlobalPoint=False; Kuka.PointName={point_name[1:]}; Kuka.BlendingEnabled={str(C_PTP).upper()}; Kuka.MoveDataName={PDAT_name[1:]}; Kuka.VelocityPath={vel}; Kuka.CurrentCDSetIndex=0; Kuka.MovementParameterFieldEnabled=True; IlfCommand=PTP\n;ENDFOLD\n"
         if not isinstance(PDAT, str) or not isinstance(FDAT, str):
             self.point_counter += 1  
         src_code = ilf + src_code + "\n;ENDFOLD\n"
@@ -368,11 +370,35 @@ class KUKATranslator:
         }
         return axis
     
+
+
+    def E6AXIS(self, A1=-1000, A2=-90,A3=90, A4=0, A5=-90, A6=0, E1=0, E2=0,E3=0,E4=0,E5=0,E6=0):
+        """Generates an AXIS structure."""
+        axis = {
+            "A1": A1,
+            "A2": A2,
+            "A3": A3,
+            "A4": A4,
+            "A5": A5,
+            "A6": A6,
+            "E1": E1,
+            "E2": E2,
+            "E3": E3,
+            "E4": E4,
+            "E5": E5,
+            "E6": E6
+        }
+        return axis
+
+    
     def _generate_dat_header(self):
         """Generates the header for the .dat file, including external declarations."""
 
-        dat_header = f"""&ACCESS RVP
-&PARAM EDITMASK = *
+        dat_header = f"""&ACCESS RVP1
+&REL 1217
+&PARAM WOPTRAJECTORYID = 2
+&PARAM WOPTEMPLATENAME = WopCoreTemplatePath
+&PARAM DISKPATH = KRC:\R1\Program\Working Paths
 DEFDAT  {self.program_name}
 ;FOLD EXTERNAL DECLARATIONS;%{{PE}}%MKUKATPBASIS,%CEXT,%VCOMMON,%P
 ;FOLD BASISTECH EXT;%{{PE}}%MKUKATPBASIS,%CEXT,%VEXT,%P
@@ -398,22 +424,39 @@ DECL STATE_T APP_STATE
         timestamp = datetime.now().strftime("%Y-%m-%d-%H_%M")
         
         # Mirroring the exact structure provided: INI, CHECK, JobInfo, HomePos
-        src_header = f"""DEF  {self.program_name} ( )
+        src_header = f"""&ACCESS RVP1
+&REL 1217
+&PARAM WOPTRAJECTORYID = 2
+&PARAM WOPTEMPLATENAME = WopCoreTemplatePath
+&PARAM DISKPATH = KRC:\R1\Program\Working Paths
+DEF  {self.program_name} ( )
 
 ;FOLD INI
-CONTINUE
-IF NOT $ON_PATH THEN
-  ;FOLD BASISTECH INI
-    GLOBAL INTERRUPT DECL 3 WHEN $STOPMESS==TRUE DO IR_STOPM ( )
-    INTERRUPT ON 3 
-    BAS (#INITMOV,0 )
-  ;ENDFOLD (BASISTECH INI)
-  ;FOLD USER INI
-    ;Make your modifications here
-
-  ;ENDFOLD (USER INI)
-ENDIF
+InitWopCoreSrc(#Init_Trajectory)
 ;ENDFOLD (INI)
+
+;FOLD Manual mode
+IF X_Rob_InManu THEN
+;Write here the code executed only in manual mode
+
+ENDIF
+;ENDFOLD
+
+X_Prod_En_Cours[2]=TRUE
+
+;FOLD PTP PT_LoopPos1 Vel=10 % DEFAULT Tool[1]:Gun Base[0];%{{PE}}
+;FOLD Parameters ;%{{h}}
+;Params IlfProvider=kukaroboter.basistech.inlineforms.movement.old; Kuka.IsGlobalPoint=False; Kuka.PointName=PT_LoopPos1; Kuka.BlendingEnabled=False; Kuka.MoveDataPtpName=DEFAULT; Kuka.VelocityPtp=10; Kuka.CurrentCDSetIndex=0; Kuka.MovementParameterFieldEnabled=True; IlfCommand=PTP
+;ENDFOLD
+$BWDSTART = FALSE
+PDAT_ACT = PDEFAULT
+FDAT_ACT = FPT_LoopPos1
+BAS(#PTP_PARAMS, 10.0)
+SET_CD_PARAMS (0)
+PTP XPT_LoopPos1
+;ENDFOLD
+
+
 
 ;FOLD CHECK DAT-FILE GENERATION NUMBER
   IF APP_GENNUMBER <> 215375 THEN
@@ -450,7 +493,7 @@ $ADVANCE = 5
             f_dat.write(self._generate_dat_header())
             f_src.write(self._generate_src_header())
             # go to start position
-            xdat = self.AXIS(A1=-1000, A2=-90, A3=90, A4=0, A5=-90, A6=0)
+            xdat = self.E6AXIS(A1=-1000, A2=-90, A3=90, A4=0, A5=-90, A6=0,E2 = -41, E3 = 33)
             pdat = self.PDAT(VEL=100, ACC=100)
             fdat = self.FDAT(TOOL_NO=self.tool_id[0], BASE_NO=self.base_id[0])
             src_code, dat_code  = self.PTP(xdat, pdat, fdat, C_PTP=False)
@@ -459,35 +502,58 @@ $ADVANCE = 5
 
             for i ,traj in enumerate(trajectory):
                 f_src.write(f"{self.routine_name}_{i}()\n")
-                points = self.change_substrates(i, traj)
-                fdat = self.FDAT(TOOL_NO=self.tool_id[i], BASE_NO=self.base_id[i])
-                ldat = self.LDAT(VEL=1.0)
-                xdat = self.E6POS(X=points[0]['X'], Y=points[0]['Y'], Z=points[0]['Z'], A=points[0]['A'], B=points[0]['B'], C=points[0]['C'])
-                src_code, dat_code = self.LIN(xdat, ldat, fdat, C_DIS=False)
-                f_src.write(src_code)
-                f_dat.write(dat_code)
-
-                xdat = self.E6POS(X=points[1]['X'], Y=points[1]['Y'], Z=points[1]['Z'], A=points[1]['A'], B=points[1]['B'], C=points[1]['C'])
-                src_code, dat_code = self.LIN(xdat, ldat, fdat, C_DIS=False)
-                f_src.write(src_code)
-                f_dat.write(dat_code)
-
-
+                f_src.write(""";FOLD PTP PT_LoopPos1 Vel=60 % DEFAULT Tool[1]:Gun Base[0];%{{PE}}
+;FOLD Parameters ;%{{h}}
+;Params IlfProvider=kukaroboter.basistech.inlineforms.movement.old; Kuka.IsGlobalPoint=False; Kuka.PointName=PT_LoopPos1; Kuka.BlendingEnabled=False; Kuka.MoveDataPtpName=DEFAULT; Kuka.VelocityPtp=10; Kuka.CurrentCDSetIndex=0; Kuka.MovementParameterFieldEnabled=True; IlfCommand=PTP
+;ENDFOLD
+$BWDSTART = FALSE
+PDAT_ACT = PDEFAULT
+FDAT_ACT = FPT_LoopPos1
+BAS(#PTP_PARAMS, 60.0)
+SET_CD_PARAMS (0)
+PTP XPT_LoopPos1
+;ENDFOLD
+""")
+                # here I should add the changing substrate trajectory
             f_src.write("END\n")
 
             for i, traj in enumerate(trajectory):
                 f_src.write(f"\n; --- Routine for substrate {i} ---\n")
                 f_dat.write(f"\n; Data for {self.routine_name}_{i}\n")
                 f_src.write(f"DEF {self.routine_name}_{i}()\n")
+
+                
+                
+                Aux = None
                 for point in traj:
-                    xdat = self.E6POS(X=point['X'], Y=point['Y'], Z=point['Z'], A=point['A'], B=point['B'], C=point['C'])
-                    ldat = self.LDAT(VEL=point['VEL'])
-                    fdat = self.FDAT(TOOL_NO=self.tool_id[i], BASE_NO=self.base_id[i])
-                    src_code, dat_code  = self.LIN(xdat, ldat, fdat, C_DIS=True)
-                    f_dat.write(dat_code)
-                    f_src.write(src_code)
+                    if point['mode']=='LIN':
+                        xdat = self.E6POS(X=point['X'], Y=point['Y'], Z=point['Z'], A=point['A'], B=point['B'], C=point['C'])
+                        ldat = self.LDAT(VEL=point['VEL'])
+                        fdat = self.FDAT(TOOL_NO=self.tool_id[i], BASE_NO=self.base_id[i])
+                        src_code, dat_code  = self.LIN(xdat, ldat, fdat, C_DIS=True)
+                        f_dat.write(dat_code)
+                        f_src.write(src_code)
+                        Aux = None
+                    elif point['mode']=='CIRC':
+                        if Aux is None:
+                            Aux = self.E6POS(X=point['X'], Y=point['Y'], Z=point['Z'], A=point['A'], B=point['B'], C=point['C'])
+                        else:
+                            Des = self.E6POS(X=point['X'], Y=point['Y'], Z=point['Z'], A=point['A'], B=point['B'], C=point['C'])
+                            circle_parametre = self.circle_parameter(Aux, Des, Orientation_type='VAR', Circular_movement_type='PATH')
+                            ldat = self.LDAT(VEL=point['VEL'])
+                            fdat = self.FDAT(TOOL_NO=self.tool_id[i], BASE_NO=self.base_id[i])
+                            src_code, dat_code  = self.CIRC(circle_parametre, ldat, fdat, C_DIS=True)
+                            Aux = None
+                            f_dat.write(dat_code)
+                            f_src.write(src_code)
+                            
+                    
+                    
                 f_src.write("END\n;End of routine {i}\n")
                 f_dat.write(f";ENDDAT for {self.routine_name}_{i}\n\n")
+
+
+            
 
             
             f_dat.write("ENDDAT\n")
@@ -517,8 +583,8 @@ WAIT SEC {wait_time}
 
 
     def generate_programs(self, trajectory, output_dir="."):
-        if not self.change_substrates(trajectory=trajectory[0]):
-            print("Warning: No substrate change routine defined. Please define the movement between substrates.")
+        #if not self.change_substrates(trajectory=trajectory[0]):
+        #    print("Warning: No substrate change routine defined. Please define the movement between substrates.")
         script_dir = Path(__file__).parent.resolve()
         directory = script_dir / output_dir
         os.makedirs(directory, exist_ok=True)
@@ -527,4 +593,13 @@ WAIT SEC {wait_time}
     
 
 if __name__ == "__main__":
+    import numpy as np
     print("Please run sample_test.py to see the KUKA program generation in action with a sample trajectory.")
+    i = 1
+    theta0 = 40
+    dth = 10
+
+    ranging = np.arange(theta0, 180-theta0, dth) 
+    import math
+    t = math.asin(-0.5)
+    print(t)
