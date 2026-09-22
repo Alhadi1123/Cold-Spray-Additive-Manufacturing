@@ -1,0 +1,100 @@
+
+
+
+--- Substrate 1 Parameters ---
+
+Track 1: 1 A62.0 D34.0 V116.0
+Track 2: 2 A50.0 D32.0 V99.0
+Track 3: 1 A67.0 D40.0 V75.0
+Track 4: 2 A86.0 D88.0 V113.0
+Track 5: 1 A87.0 D70.0 V86.0
+Track 6: 2 A76.0 D98.0 V73.0
+Track 7: 1 A55.0 D97.0 V137.0
+Track 8: 2 A58.0 D55.0 V82.0
+Track 9: 1 A71.0 D99.0 V86.0
+Track 10: 2 A69.0 D85.0 V97.0
+Track 11: 1 A80.0 D67.0 V136.0
+Track 12: 2 A52.0 D73.0 V107.0
+Track 13: 1 A57.0 D82.0 V90.0
+Track 14: 2 A87.0 D96.0 V132.0
+Track 15: 1 A89.0 D81.0 V68.0
+Track 16: 2 A60.0 D61.0 V115.0
+Track 17: 1 A66.0 D98.0 V111.0
+Track 18: 2 A88.0 D42.0 V124.0
+Track 19: 1 A66.0 D68.0 V112.0
+Track 20: 2 A54.0 D45.0 V109.0
+Track 21: 1 A62.0 D49.0 V104.0
+Track 22: 2 A72.0 D77.0 V53.0
+Track 23: 1 A85.0 D95.0 V63.0
+
+
+
+--- Substrate 2 Parameters ---
+
+Track 1: 1 A78.0 D69.0 V65.0
+Track 2: 2 A73.0 D32.0 V88.0
+Track 3: 1 A68.0 D79.0 V60.0
+Track 4: 2 A73.0 D56.0 V135.0
+Track 5: 1 A51.0 D77.0 V119.0
+Track 6: 2 A54.0 D65.0 V69.0
+Track 7: 1 A81.0 D72.0 V93.0
+Track 8: 2 A73.0 D56.0 V72.0
+Track 9: 1 A57.0 D63.0 V148.0
+Track 10: 2 A76.0 D47.0 V55.0
+Track 11: 1 A77.0 D92.0 V149.0
+Track 12: 2 A62.0 D76.0 V101.0
+Track 13: 1 A88.0 D33.0 V71.0
+Track 14: 2 A80.0 D31.0 V121.0
+Track 15: 1 A60.0 D35.0 V61.0
+
+
+
+--- Substrate 3 Parameters ---
+
+Track 1: 1 A70.0 D73.0 V123.0
+Track 2: 2 A65.0 D86.0 V128.0
+Track 3: 1 A90.0 D60.0 V103.0
+Track 4: 2 A75.0 D47.0 V108.0
+Track 5: 1 A67.0 D54.0 V95.0
+Track 6: 2 A77.0 D36.0 V142.0
+Track 7: 1 A84.0 D74.0 V142.0
+Track 8: 2 A52.0 D51.0 V64.0
+Track 9: 1 A51.0 D90.0 V55.0
+Track 10: 2 A79.0 D83.0 V120.0
+Track 11: 1 A61.0 D80.0 V81.0
+Track 12: 2 A84.0 D53.0 V147.0
+Track 13: 1 A59.0 D94.0 V76.0
+Track 14: 2 A56.0 D70.0 V126.0
+Track 15: 1 A58.0 D37.0 V130.0
+Track 16: 2 A82.0 D89.0 V106.0
+Track 17: 1 A59.0 D85.0 V145.0
+Track 18: 2 A75.0 D91.0 V100.0
+Track 19: 1 A71.0 D64.0 V130.0
+Track 20: 2 A81.0 D60.0 V91.0
+
+
+
+--- Substrate 4 Parameters ---
+
+Track 1: 1 A85.0 D41.0 V97.0
+Track 2: 2 A65.0 D50.0 V144.0
+Track 3: 1 A71.0 D43.0 V84.0
+Track 4: 2 A64.0 D89.0 V50.0
+Track 5: 1 A82.0 D48.0 V77.0
+Track 6: 2 A54.0 D93.0 V91.0
+Track 7: 1 A79.0 D62.0 V58.0
+Track 8: 2 A83.0 D78.0 V80.0
+Track 9: 1 A63.0 D42.0 V79.0
+Track 10: 2 A74.0 D84.0 V134.0
+Track 11: 1 A53.0 D39.0 V141.0
+Track 12: 2 A56.0 D57.0 V58.0
+Track 13: 1 A69.0 D44.0 V127.0
+Track 14: 2 A83.0 D38.0 V52.0
+Track 15: 1 A63.0 D66.0 V67.0
+Track 16: 2 A89.0 D52.0 V117.0
+Track 17: 1 A69.0 D58.0 V138.0
+Track 18: 2 A87.0 D67.0 V119.0
+Track 19: 1 A60.0 D38.0 V121.0
+Track 20: 2 A72.0 D74.0 V59.0
+Track 21: 1 A67.0 D95.0 V80.0
+Track 22: 2 A79.0 D90.0 V136.0

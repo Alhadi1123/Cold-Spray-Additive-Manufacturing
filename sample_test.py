@@ -1,16 +1,17 @@
-import json
+
+import logging
 from re import sub
 import copy
+import sys
 import numpy as np
 import math
 from scipy.spatial.transform import Rotation as R
 import matplotlib.pyplot as plt
 import os
 from itertools import product, accumulate
-
 from krl_translator import KUKATranslator
 from dataset_prep import generate_layer_toolpath_experimental as generate_layer_toolpath
-
+import pandas as pd
 
 def discretize_lines_for_kinematics(deposition_lines, lines_parameters=None):
     """
@@ -24,47 +25,55 @@ def discretize_lines_for_kinematics(deposition_lines, lines_parameters=None):
             'safety_distance': 20.0
         }
     waypoint = {
-        'point': np.array([-2*lines_parameters['safety_distance'], 0, 0, 1.0]),
+        'point': np.array([-2*lines_parameters['safety_distance'], 0, 0]),
         'sod': 100,
         'angle': 0,
-        'rot_axis': np.array([0, 0, 1]),
-        'velocity': 1.0
+        'tangent': np.array([0, 0, 1]),
+        'normal': np.array([0, 0, 1]),
+        'velocity': 1.0,
+        'mode': 'LIN'
     }
     trajectory.append(waypoint)
 
+
+
     for line in deposition_lines:
         # Interpolate points along the line
-        rot_axis = np.array(line['end']) - np.array(line['start'])  
-        rot_axis = rot_axis / np.linalg.norm(rot_axis) if np.linalg.norm(rot_axis) > 0 else np.array([0, 0, 1])
-        x_vals = np.array([line['start'][0] -lines_parameters.get('safety_distance', 20.0)*rot_axis[0]])
-        y_vals = np.array([line['start'][1] -lines_parameters.get('safety_distance', 20.0)*rot_axis[1]])
-        z_vals = np.array([line['start'][2] -lines_parameters.get('safety_distance', 20.0)*rot_axis[2]])
+        tangent = np.array(line['end']) - np.array(line['start'])  
+        tangent = tangent / np.linalg.norm(tangent) if np.linalg.norm(tangent) > 0 else np.array([0, 0, 1])
+        x_vals = np.array([line['start'][0] -lines_parameters.get('safety_distance', 20.0)*tangent[0]])
+        y_vals = np.array([line['start'][1] -lines_parameters.get('safety_distance', 20.0)*tangent[1]])
+        z_vals = np.array([line['start'][2] -lines_parameters.get('safety_distance', 20.0)*tangent[2]])
         x_vals = np.append(x_vals, np.linspace(line['start'][0], line['end'][0], lines_parameters.get('points_per_line', 2)))
         y_vals = np.append(y_vals, np.linspace(line['start'][1], line['end'][1], lines_parameters.get('points_per_line', 2)))
         z_vals = np.append(z_vals, np.linspace(line['start'][2], line['end'][2], lines_parameters.get('points_per_line', 2)))
-        x_vals = np.append(x_vals, np.array([line['end'][0] +lines_parameters.get('safety_distance', 20.0)*rot_axis[0]]))
-        y_vals = np.append(y_vals, np.array([line['end'][1] +lines_parameters.get('safety_distance', 20.0)*rot_axis[1]]))
-        z_vals = np.append(z_vals, np.array([line['end'][2] +lines_parameters.get('safety_distance', 20.0)*rot_axis[2]]))
-
+        x_vals = np.append(x_vals, np.array([line['end'][0] +lines_parameters.get('safety_distance', 20.0)*tangent[0]]))
+        y_vals = np.append(y_vals, np.array([line['end'][1] +lines_parameters.get('safety_distance', 20.0)*tangent[1]]))
+        z_vals = np.append(z_vals, np.array([line['end'][2] +lines_parameters.get('safety_distance', 20.0)*tangent[2]]))
+        normal = np.array([0, 0, 1])  
         for x, y, z in zip(x_vals, y_vals, z_vals):
             waypoint = {
-                'point': np.array([x, y, z, 1.0]),
+                'point': np.array([x, y, z]),
                 'sod': line['sod'],
                 'angle': 90-line['deposition_angle'],
-                'rot_axis': rot_axis ,
-                'velocity': line['velocity']/1000.0
+                'tangent': tangent,
+                'normal': normal,
+                'velocity': line['velocity']/1000.0,
+                'mode': 'LIN'
             }
             trajectory.append(waypoint)
     
     last_line = deposition_lines[-1]
-    rot_axis = np.array(last_line['end']) - np.array(last_line['start'])
-    rot_axis = rot_axis / np.linalg.norm(rot_axis) if np.linalg.norm(rot_axis) > 0 else np.array([0, 0, 1])  
+    tangent = np.array(last_line['end']) - np.array(last_line['start'])
+    tangent = tangent / np.linalg.norm(tangent) if np.linalg.norm(tangent) > 0 else np.array([0, 0, 1])
     waypoint = {
-        'point': np.array([trajectory[-1]['point'][0]+lines_parameters['safety_distance']*rot_axis[0],trajectory[-1]['point'][1]+lines_parameters['safety_distance']*rot_axis[1], trajectory[-1]['point'][2]+lines_parameters['safety_distance']*rot_axis[2], 1.0]),
+        'point': np.array([trajectory[-1]['point'][0]+lines_parameters['safety_distance']*tangent[0],trajectory[-1]['point'][1]+lines_parameters['safety_distance']*tangent[1], trajectory[-1]['point'][2]+lines_parameters['safety_distance']*tangent[2]]),
         'sod': 50,
         'angle': 0,
-        'rot_axis': np.array([0, 0, 1]),
-        'velocity': 0.5
+        'tangent': tangent,
+        'normal': np.array([0, 0, 1]),
+        'velocity': 0.5,
+        'mode': 'LIN'
     }
     trajectory.append(waypoint)
     return trajectory
@@ -89,8 +98,6 @@ def get_hardcoded_test_batch(tracks_parameters=None):
     
     # Process into lists
     return [hardcoded_lines]
-
-
 def generate_parameters_table(param_ranges=None, repeat=1):
     """
     Generates a table of test sample parameters from parameter ranges.
@@ -154,7 +161,6 @@ def generate_parameters_table(param_ranges=None, repeat=1):
         combinations = repeated_combinations
 
     return combinations
-
 def visualize_parameter_combinations(combinations):
     """
     Utility function to visualize the generated parameter combinations.
@@ -162,7 +168,6 @@ def visualize_parameter_combinations(combinations):
     print("Generated Parameter Combinations:")
     for i, combo in enumerate(combinations):
         print(f"Combination {i+1}: {combo}")
-
 def print_deposition_tracks(deposition_lines):
     """
     Utility function to print deposition tracks parameters.
@@ -179,18 +184,11 @@ def print_waypoints(waypoints, num = 10):
         print(f"Waypoint {i+1}: {waypoint}")
         if i == num:
             break
-
 def draw_kuka_points(waypoints):
     """
     Utility function to visualize waypoints in 3D.
     """
     pass
-
-
-
-
-
-
 def draw_3d(waypoints):
     """
     Utility function to visualize waypoints in 3D.
@@ -204,8 +202,8 @@ def draw_3d(waypoints):
     ax.scatter(points[:, 0], points[:, 1], points[:, 2], color='red', s=1, label='Points')
     #ax.scatter(points[672:, 0], points[672:, 1], points[672:, 2], color='green', s=1, label='Points')
     
-    #ax.quiver(points[-36:, 0], points[-36:, 1], points[-36:, 2], normals[-36:, 0], normals[-36:, 1], normals[-36:, 2], color='blue', label='Normals')
-    ax.quiver(points[:36, 0], points[:36, 1], points[:36, 2], tangents[:36, 0], tangents[:36, 1], tangents[:36, 2], color='blue', label='Normals')
+    ax.quiver(points[-36:, 0], points[-36:, 1], points[-36:, 2], normals[-36:, 0], normals[-36:, 1], normals[-36:, 2], color='blue', label='Normals')
+    #ax.quiver(points[:36, 0], points[:36, 1], points[:36, 2], tangents[:36, 0], tangents[:36, 1], tangents[:36, 2], color='blue', label='Normals')
     
     #ax.scatter(0,0,0,color='green',s=5, label='Points')
     ax.set_xlabel('X')
@@ -215,194 +213,186 @@ def draw_3d(waypoints):
     ax.axis('equal')
     
     plt.show()
+def draw_path(waypoints):
+    """
+    Utility function to visualize waypoints in 3D and also single points on the path.
+    """
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(projection='3d')
+    points = np.array([waypoint['point'] for waypoint in waypoints])
+    ax.plot(points[:, 0], points[:, 1], points[:, 2], color='red', label='Path')
+    ax.scatter(points[:, 0], points[:, 1], points[:, 2], color='blue', s=5, label='Sample Points')
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.legend()
+    ax.axis('equal')
 
 
+    
+    plt.show()
 
-
-
-def prepare_dataset_samples(tracks_parameters=None, combinations_dir = None):
+def prepare_dataset_samples(**kwargs):
     """
     Main function to prepare dataset samples.
     """
-
-    if tracks_parameters is None:
-        tracks_parameters = {
-            'parameter_ranges': {
-                'deposition_angle': {'min': 50, 'max': 90, 'steps': 5},
-                'sod': {'values': [30, 50, 70, 90, 100]},
-                'velocity': {'values': [25, 50, 100]}
-                
-            },
-            'substrate_width': 50.0,
-            'intertrack_spacing': 15.0,
-            'safety_offset': 10.0,
-            'lengths_of_substrate': [50.0, 100.0, 150.0]
-        }
-
-
+    tracks_parameters = kwargs.get('tracks_parameters', None)
+    lines_parameters = kwargs.get('lines_parameters', None)
+    layer_parameters = kwargs.get('layer_parameters', None)
+    program_parameters = kwargs.get('program_parameters', None)
+    combinations_dir = tracks_parameters.get('combinations_dir', None)
+    
     if combinations_dir is None:
+        logging.info(f"No parameter file provided. Generating parameter combinations from ranges.")
         combinations = generate_parameters_table(tracks_parameters['parameter_ranges'], tracks_parameters['repeat'])
     else:
-        with open(combinations_dir, 'r') as f:
-            combinations = json.load(f)
-    deposition_lines = []
-    i = 0
-    j = 0
+        logging.info(f"Loading parameters from {combinations_dir}")
+        df_imported = pd.read_csv(combinations_dir)
+        df_imported = df_imported.round(decimals=0)
+        combinations = df_imported.to_dict(orient='records')
+    
+    logging.info(f"Parameters combinations number to be generated: {len(combinations)}")
+    
+    logging.info(f"\n--- Generating Parameterized Lines ---\n")
+    i, j = 0, 0
+    substrate_lines, deposition_lines = [], []
     y = tracks_parameters['safety_offset']
-    substrate_lines = []
+    prev_sod = 30
     for parameters in combinations:
-        
-
+        if tracks_parameters['adaptive_spacing']:
+            y += (parameters['sod'] - prev_sod) * 4.0/70.0
         line = {
             'start': [(j % 2)*tracks_parameters['substrate_width'], y, 0],
             'end': [((j+1)% 2)*tracks_parameters['substrate_width'], y, 0],
             'sod': parameters['sod'],
-            'deposition_angle': 90 + (-1)*((j % 2)*2-1)*(90 - parameters['deposition_angle']),
+            'deposition_angle': 90 + (1)*((j % 2)*2-1)*(90 - parameters['deposition_angle']),
             'velocity': parameters['velocity']
         }
+        print(f"Track {j+1} on Substrate {i+1}: Start {round(line['start'][1], 2)}, End {round(line['end'][1], 2)}, SOD {round(line['sod'], 2)}, Angle {round(line['deposition_angle'], 2)}, Velocity {round(line['velocity'], 2)}")
         substrate_lines.append(line)
+
+        prev_sod = parameters['sod']
         y += tracks_parameters['intertrack_spacing']
+        
+
         j += 1
         if  y > tracks_parameters['lengths_of_substrate'][i] - tracks_parameters['safety_offset']:
             i+=1
             y = tracks_parameters['safety_offset']
             deposition_lines.append(substrate_lines)
+            prev_sod = 30
             substrate_lines = []
             j=0
 
         if i >= len(tracks_parameters['lengths_of_substrate']):
-            print("Warning: More parameter combinations than substrate lengths.")
+            logging.warning("More parameter combinations than substrate lengths.")
             break
+
     if substrate_lines:
         deposition_lines.append(substrate_lines)
-    return deposition_lines
 
-def full_pipeline(method="hardcoded", tracks_parameters=None, lines_parameters=None, layer_parameters=None, program_parameters=None):
+
+    text = ""
+    for i , substrate_lines in enumerate(deposition_lines):
+        text += f"\n\n\n--- Substrate {i+1} Parameters ---\n\n"
+        text += print_deposition_tracks(substrate_lines)
+    
+    txt_file = os.path.join(program_parameters['output_dir'], f"{program_parameters['program_name']}_parameters.txt")
+    with open(txt_file, 'w') as f:
+        f.write(text)
+        f.close()
+    logging.info(f"\nParameter details saved to: {txt_file}")
+
+    logging.info(f"Total deposition lines generated: {sum(len(sublist) for sublist in deposition_lines)}")
+    logging.info(f"Total substrates generated: {len(deposition_lines)}")
+    logging.info(f"Total deposition lines per substrate: {[len(sublist) for sublist in deposition_lines]}")
+    routines = []
+    for i, line_set in enumerate(deposition_lines):
+        routine = discretize_lines_for_kinematics(line_set, lines_parameters)
+        routines.append(routine)
+
+    logging.info(f"Routines are ready for KUKA transformation. Total routines: {len(routines)}")
+
+    return routines
+
+def full_pipeline(funcs=prepare_dataset_samples, **kwargs):
     """
     Executes the full dataset preparation pipeline.
     """
 
-    if program_parameters is None:
-        program_parameters = {
-            'program_name': "plan_dessai",
-            'routine_name': "Routine",
-            'tool_id': [2,2,2,2,2,2],
-            'base_id': [10, 9, 8, 7, 6, 5],
-            'number_of_programs': 3,
-            'number_of_substrates': [1,3,4],
-            'output_dir': directory
-        }
-    if layer_parameters is None:
-        layer_parameters = {
-            'Layer_pos': [[0, 0, 0]] * 8,
-            'layer_orientation': [R.from_matrix([[-1,0,0],[0,1,0],[0,0,-1]]).as_euler('zyx', degrees=True)] * 8
-        }
+    default_tracks_parameters = {
+        'parameter_ranges': {
+            #'deposition_angle': {'min': 50, 'max': 90, 'steps': 5},
+            'deposition_angle': {'min': 50, 'max': 90, 'steps': 5},
+            'sod': {'min': 30, 'max': 100,  'steps': 5},
+            'velocity': {'min': 50, 'max': 150, 'steps': 3}
+        },
+        'repeat': 1 ,
+        'substrate_width': 50.0,
+        'intertrack_spacing': 15.0,
+        'adaptive_spacing': True,
+        'safety_offset': 10.0,
+        'lengths_of_substrate': [240,320,350,360]
+    }
+    default_lines_parameters = {
+        'points_per_line': 2,
+        'safety_distance': 50.0
+    }
+    default_layer_parameters = {
+        'Layer_pos': [[0,0,0]]*8,
+        'layer_orientation': [R.from_matrix([[-1,0,0],[0,1,0],[0,0,-1]]).as_euler('zyx', degrees=True)]*8
+    }
+    default_program_parameters = {
+        'program_name': "profile_defaut",
+        'routine_name': "Routine",
+        'tool_id': [2,2,2,2,2,2],
+        'base_id': [10, 9, 8, 7, 6, 5],
+        'number_of_programs': 1,
+        'number_of_substrates': [4],
+        'output_dir': "output"
+    }
+    if funcs is None:
+        funcs = [defaut_reparation_balayage_2]
+
+    tracks_parameters = kwargs.get('tracks_parameters', default_tracks_parameters)
+    lines_parameters = kwargs.get('lines_parameters', default_lines_parameters)
+    layer_parameters = kwargs.get('layer_parameters', default_layer_parameters)
+    program_parameters = kwargs.get('program_parameters', default_program_parameters)
+
+    routines = funcs(tracks_parameters=tracks_parameters, lines_parameters=lines_parameters, layer_parameters=layer_parameters, program_parameters=program_parameters)
+    draw_path(routines[-1])
+    draw_3d(routines[-1])
+    logging.info(f"Generating layers Routines")
+    kuka_routines = generate_layer_toolpath(
+            Layer_poses=layer_parameters['Layer_pos'],
+            layer_orientations=layer_parameters['layer_orientation'],
+            routines=routines
+        )
 
 
-    
-    if method == "custom":
-        waypoints = defaut_reparation_balayage_2()
-        trajectory = [waypoints]
-        path = []
-        for i,traj in enumerate(trajectory):
-            subpath = generate_layer_toolpath(
-                Layer_pos=layer_parameters['Layer_pos'][i],
-                layer_orientation=layer_parameters['layer_orientation'][i],
-                trajectory=traj
-            )
-            path.append(subpath)
-            print(len(subpath))
-
-        translator = KUKATranslator(
+    logging.info(f"Generating KUKA Programs")
+    translator = KUKATranslator(
         program_name=program_parameters['program_name'],
         routine_name=program_parameters['routine_name'],
         tool_id=program_parameters['tool_id'],
         base_id=program_parameters['base_id']
     )
-        translator.change_substrates = my_change_substrates
-        print("\n--- Generating KRL Programs ---")
-        print(f"Total programs to generate: {len(path)}")
-
-        translator.generate_programs(trajectory=path, output_dir=program_parameters['output_dir'])
-
-
-
-
-
-        return
-    print("\n--- Generating Deposition Lines ---\n")
-    if method == "hardcoded":
-        lines = get_hardcoded_test_batch(tracks_parameters)
-    elif method == "parameterized":
-        lines = prepare_dataset_samples(tracks_parameters)
-    print(f"\nTotal line sets generated: {sum(len(line_set) for line_set in lines)}")
-    print(f"Total trajectories generated: {len(lines)}\n")
-    print("\n--- Discretizing Lines for Kinematics ---")
-    trajectory = []
-    for i, line_set in enumerate(lines):
-        traj = discretize_lines_for_kinematics(line_set, lines_parameters)
-        trajectory.append(traj)
-            
-   
-
-
-
-    print(f"Total points generated: {sum(len(sublist) for sublist in trajectory)}\n")
-    for i in range(min(2, len(trajectory))):
-        for j in range(min(2, len(trajectory[i]))):
-            print(f"Trajectory {i}, Point {j}: Pos={trajectory[i][j]['point'][:3]}, SoD={trajectory[i][j]['sod']}, Angle={trajectory[i][j]['angle']},vel={trajectory[i][j]['velocity']}")
-    
-    
-    # 3. Pass into your kinematic function
-
-    path = []
-    for i,traj in enumerate(trajectory):
-        subpath = generate_layer_toolpath(
-            Layer_pos=layer_parameters['Layer_pos'][i],
-            layer_orientation=layer_parameters['layer_orientation'][i],
-            trajectory=traj
-        )
-        path.append(subpath)
-        
-
-
-    print("\n--- Kinematic Toolpath Generated ---")
-    #for i, p in enumerate(path[0]):
-    #    print(f"P{i+1}: LIN {{X {p['X']:>6}, Y {p['Y']:>6}, Z {p['Z']:>6}, A {p['A']:>6}, B {p['B']:>6}, C {p['C']:>6}}}")
-
-    translator = KUKATranslator(
-    program_name=program_parameters['program_name'],
-    routine_name=program_parameters['routine_name'],
-    tool_id=program_parameters['tool_id'],
-    base_id=program_parameters['base_id']
-)
     translator.change_substrates = my_change_substrates
-    print("\n--- Generating KRL Programs ---")
-    print(f"Total programs to generate: {len(path)}")
-  
-    k = 0
     accumulated_subs = list(accumulate(program_parameters['number_of_substrates']))
-
 
     if program_parameters['number_of_programs'] != 1:
         translator.program_name = f"{program_parameters['program_name']}_{1}"
-    translator.generate_programs(trajectory=path[:accumulated_subs[0]], output_dir=program_parameters['output_dir'])
+    translator.generate_programs(trajectory=kuka_routines[:accumulated_subs[0]], output_dir=program_parameters['output_dir'])
 
     for i in range(program_parameters['number_of_programs']-1):
         translator.program_name = f"{program_parameters['program_name']}_{i+2}"
-        translator.generate_programs(trajectory=path[accumulated_subs[i]:accumulated_subs[i+1]], output_dir=program_parameters['output_dir'])
-    text = ""
-    for i , line in enumerate(lines):
-        text += f"\n\n\n--- Substrate {i+1} Parameters ---\n\n"
-        text += print_deposition_tracks(line)
+        translator.generate_programs(trajectory=kuka_routines[accumulated_subs[i]:accumulated_subs[i+1]], output_dir=program_parameters['output_dir'])
+        logging.info(f"\n--- KUKA Program {translator.program_name} Generated ---\n")
     
-    txt_file = os.path.join(program_parameters['output_dir'], f"{program_parameters['program_name']}_parameters.txt")
-    with open(txt_file, 'w') as f:
-        f.write(text)
-    print(f"\nParameter details saved to: {txt_file}")
 
-    
-def defaut_reparation_oval(T= 5, t = 0.2 ,R0= 145,r0= 11,s = 2,theta0 = 45,alpha=57, gamma=90, sod=50,v=100):
+
+
+def defaut_reparation_oval(T= 5, t = 0.2 ,R0= 145,r0= 11,s = 2,theta0 = 45,alpha=57, gamma=90, sod=50,v=100, **kwargs):
     """this function is to generate the points, normals, and tangents for an oval-like paths
     T: Total Thickness of defaut
     t: thickness of one layer of deposition
@@ -455,10 +445,7 @@ def defaut_reparation_oval(T= 5, t = 0.2 ,R0= 145,r0= 11,s = 2,theta0 = 45,alpha
 
                 waypoints.append(waypoint)
     return waypoints
-
-
-    
-def defaut_reparation_balayage(T= 5, t = 0.2 ,R0= 145,r0= 12.5,s = 2,theta0 = 37,alpha0=21, gamma=90, sod=50,v=0.1):
+def defaut_reparation_balayage(T= 5, t = 0.2 ,R0= 145,r0= 12.5,s = 2,theta0 = 37,alpha0=21, gamma=90, sod=50,v=0.1, **kwargs):
     """this function is to generate the points, normals, and tangents for an oval-like paths
     T: Total Thickness of defaut
     t: thickness of one layer of deposition
@@ -523,13 +510,11 @@ def defaut_reparation_balayage(T= 5, t = 0.2 ,R0= 145,r0= 12.5,s = 2,theta0 = 37
 
 
     return waypoints
-            
-
-
-
-def defaut_reparation_balayage_2(d= 4, p = 7.3, l = 14.65, t = 0.4 ,R0= 145,s = 2,theta0 = 32,alpha0=22.5, gamma=90, sod=50,v=0.1,ext_circ = False):
+def defaut_reparation_balayage_2(d= 2, p = 6, l = 8, t = 0.4 ,R0= 145,s = 2,theta0 = 40,alpha0=22.5, gamma=90, sod=50,v=0.1,ext_circ = False, **kwargs):
     """this function is to generate the points, normals, and tangents for an oval-like paths
-    T: Total Thickness of defaut
+    d: Total Thickness of defaut
+    p: lenght of the circular part of the cross-section 
+    l: length of the linear part of the cross-section
     t: thickness of one layer of deposition
     R0: middle radius of defaut arc
     r0: initial radius of defaut cross-section
@@ -541,6 +526,10 @@ def defaut_reparation_balayage_2(d= 4, p = 7.3, l = 14.65, t = 0.4 ,R0= 145,s = 
     v: deposition velocity
     
     """
+
+    
+
+    logging.info(f"Generating waypoints for defaut_reparation_balayage_2")
     safety = 6
     k = 0
     waypoints = []
@@ -558,7 +547,6 @@ def defaut_reparation_balayage_2(d= 4, p = 7.3, l = 14.65, t = 0.4 ,R0= 145,s = 
     for i in range(int(d//t)):
         r = r0-t*i
         dth = np.rad2deg(s/r)
-        print(r)
 
         X1 = []
         if i%2 == 0:
@@ -576,28 +564,28 @@ def defaut_reparation_balayage_2(d= 4, p = 7.3, l = 14.65, t = 0.4 ,R0= 145,s = 
             T12 = np.array([[0,-1,r0],[1,0 ,dd*l/2.0]])
             X2 = np.array([r*np.cos(np.deg2rad(theta)), r*np.sin(np.deg2rad(theta)),1])
             X1.append(T12@X2)
-        
-        
-        ys = np.arange(X1[-1][1],-dd*l/2.0,-dd*s)
+
+        ys = np.arange(X1[-1][1]-dd*s,-dd*l/2.0,-dd*s)
         xs = np.array([t*i]*ys.size)
 
         thetas2 = np.array([90]*ys.size)
         for x,y in zip(xs,ys):
             X1.append(np.array([x,y]))
 
-        th_start = 90+np.rad2deg(math.asin((-dd*l/2.0-X1[-1][1])/r))
+        val = s - abs(X1[-1][1]+ dd*l/2.0)
+        th_start = 90+np.rad2deg(math.asin(dd*val/r))
         if i%2 == 0:
-            thetas3 = np.arange(th_start+dth,180-th0, dth)
+            thetas3 = np.arange(th_start,180-th0, dth)
             if (180-th0) - thetas3[-1] > dth/4:
                 thetas3= np.concatenate((thetas3,np.array([thetas3[-1]+dth])))
         else:
-            thetas3 = np.arange(th_start-dth,th0, -dth)
+            thetas3 = np.arange(th_start,th0, -dth)
             if  thetas3[-1] - th0 > dth/2:
                 thetas3= np.concatenate((thetas3,np.array([thetas3[-1]-dth])))
 
             
         for theta in thetas3:
-            T12 = np.array([[0,-1,r0],[1,0 ,dd*l/2.0]])
+            T12 = np.array([[0,-1,r0],[1,0 ,-dd*l/2.0]])
             X2 = np.array([r*np.cos(np.deg2rad(theta)), r*np.sin(np.deg2rad(theta)),1])
             X1.append(T12@X2)
             
@@ -606,7 +594,6 @@ def defaut_reparation_balayage_2(d= 4, p = 7.3, l = 14.65, t = 0.4 ,R0= 145,s = 
 
             
         
-        print(thetas)
 
         for theta, x1 in zip(ths,X1):
 
@@ -640,10 +627,12 @@ def defaut_reparation_balayage_2(d= 4, p = 7.3, l = 14.65, t = 0.4 ,R0= 145,s = 
                 waypoints.append(waypoint)
             k+=1
 
-    pose= waypoints[-1]['point']
-    tan = waypoints[-1]['tangent']
-    normal = waypoints[-1]['normal']
-    pose[0] = pose[0] - 100
+    last_wp = copy.deepcopy(waypoints[-1])
+    print(waypoints[-2])
+    pose = last_wp['point']
+    tan = last_wp['tangent']*np.array([0,1,0])/np.linalg.norm(last_wp['tangent']*np.array([0,1,0]))
+    normal = np.array([0,0,1])
+    pose = pose+50*tan
     waypoint = {
         'point': pose,
         'sod': 100,
@@ -654,22 +643,26 @@ def defaut_reparation_balayage_2(d= 4, p = 7.3, l = 14.65, t = 0.4 ,R0= 145,s = 
         'mode': 'LIN'
     }
     waypoints.append(waypoint)
-    return waypoints
-            
 
+    waypoint = {
+        'point': pose+100*np.array([-1,0,0]),
+        'sod': 100,
+        'angle': 0,
+        'velocity': 0.5,
+        'tangent' : tan,
+        'normal' : normal,
+        'mode': 'LIN'
+    }
+    waypoints.append(waypoint)
+    return [waypoints]
 
-
-
-
-                
-
-
+    
 
 def my_change_substrates(i = 0, trajectory = None):
     """Example implementation of a substrate change routine."""
-    lengths_of_substrate = [297.0, 350.0, 310.0, 350.0,225.0,220.0,267.0,315.0]
+    lengths_of_substrate = [360, 240, 320, 350]
     point1 = copy.deepcopy(trajectory[-1])
-    point1['Y'] = lengths_of_substrate[i] + 15.0  # Move to a safe Y position beyond the current substrate
+    point1['Y'] = lengths_of_substrate[i] + 20.0  # Move to a safe Y position beyond the current substrate
     point1['Z'] = -20.0
     point1['A'] = 0.0
     point1['B'] = 0.0
@@ -677,26 +670,33 @@ def my_change_substrates(i = 0, trajectory = None):
     point1['VEL'] = 1.0
     point2 = copy.deepcopy(point1)
     point2['X'] = trajectory[0]['X']  # Move back to the starting X position of the next substrate
-    print(f"Changing substrate after trajectory {i} with {len(trajectory)} points.")
+    logging.info(f"Changing substrate after trajectory {i} with {len(trajectory)} points.")
     return [point1, point2]
 
 # --- Execution & Verification ---
 if __name__ == "__main__":
 
+
+    logging.basicConfig(
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+        level=logging.INFO,
+        stream=sys.stdout  # Explicitly routes output to terminal standard output
+    )
     tracks_parameters = {
         'parameter_ranges': {
             #'deposition_angle': {'min': 50, 'max': 90, 'steps': 5},
-            'deposition_angle': {'values': [90,80,70,60,50]},
-            'sod': {'values': [30, 50, 70, 90, 100]},
-            'velocity': {'values': [50, 100, 150]}
-                    
-            
+            'deposition_angle': {'min': 50, 'max': 90, 'steps': 5},
+            'sod': {'min': 30, 'max': 100,  'steps': 5},
+            'velocity': {'min': 50, 'max': 150, 'steps': 3}    
         },
-        'repeat': 2 ,
+        'combinations_dir': 'lhs_maximin_design.csv',
+        'repeat': 1 ,
         'substrate_width': 50.0,
         'intertrack_spacing': 15.0,
+        'adaptive_spacing': True,
         'safety_offset': 10.0,
-        'lengths_of_substrate': [297.0, 350.0, 310.0, 350.0,225.0,220.0,267.0,315.0]
+        'lengths_of_substrate': [360, 240, 320, 350]
     }
 
     lines_parameters = {
@@ -705,9 +705,10 @@ if __name__ == "__main__":
     }
 
     layer_parameters = {
-        'Layer_pos': [[-55,-143.6,0]]*8,
+        'Layer_pos': [[0,0,0]]*8,
         'layer_orientation': [R.from_matrix([[0,1,0],[-1,0,0],[0,0,1]]).as_euler('zyx', degrees=True)]*8
-    }
+
+              }
 
     directory = "/mnt/bureau_folder/Codes/Robot source code/Autogenerated"
     if not os.path.exists(directory):
@@ -715,14 +716,16 @@ if __name__ == "__main__":
         
 
     program_parameters = {
-        'program_name': "profile_defaut",
+        'program_name': "repair_5pass",
         'routine_name': "Routine",
         'tool_id': [2,2,2,2,2,2],
         'base_id': [10, 9, 8, 7, 6, 5],
-        'number_of_programs': 3,
-        'number_of_substrates': [1,3,4],
+        'number_of_programs': 1,
+        'number_of_substrates': [1],
         'output_dir': directory
     }
+
+    
     # parameterized, hardcoded
-    full_pipeline(method="custom", tracks_parameters=tracks_parameters, lines_parameters=lines_parameters, layer_parameters=layer_parameters, program_parameters=program_parameters)    
+    full_pipeline(funcs= prepare_dataset_samples,tracks_parameters=tracks_parameters, lines_parameters=lines_parameters, layer_parameters=layer_parameters, program_parameters=program_parameters)    
 

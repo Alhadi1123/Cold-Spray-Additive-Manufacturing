@@ -502,7 +502,11 @@ $ADVANCE = 5
 
             for i ,traj in enumerate(trajectory):
                 f_src.write(f"{self.routine_name}_{i}()\n")
-                f_src.write(""";FOLD PTP PT_LoopPos1 Vel=60 % DEFAULT Tool[1]:Gun Base[0];%{{PE}}
+                change_points = self.change_substrates(i, traj)
+                traj.extend(change_points)
+
+
+            f_src.write(""";FOLD PTP PT_LoopPos1 Vel=60 % DEFAULT Tool[1]:Gun Base[0];%{{PE}}
 ;FOLD Parameters ;%{{h}}
 ;Params IlfProvider=kukaroboter.basistech.inlineforms.movement.old; Kuka.IsGlobalPoint=False; Kuka.PointName=PT_LoopPos1; Kuka.BlendingEnabled=False; Kuka.MoveDataPtpName=DEFAULT; Kuka.VelocityPtp=10; Kuka.CurrentCDSetIndex=0; Kuka.MovementParameterFieldEnabled=True; IlfCommand=PTP
 ;ENDFOLD
@@ -595,11 +599,6 @@ WAIT SEC {wait_time}
 if __name__ == "__main__":
     import numpy as np
     print("Please run sample_test.py to see the KUKA program generation in action with a sample trajectory.")
-    i = 1
-    theta0 = 40
-    dth = 10
-
-    ranging = np.arange(theta0, 180-theta0, dth) 
-    import math
-    t = math.asin(-0.5)
-    print(t)
+    
+    
+    print(v2)
