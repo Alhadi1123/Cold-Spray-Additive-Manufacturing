@@ -17,3 +17,7 @@ ENV/
 .DS_Store
 *.swp
 *~
+
+
+lhs_maximin_test.csv
+lhs_maximin_testing.csv
